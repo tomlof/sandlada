@@ -13,22 +13,31 @@ from util import *
 def test_ProxOp():
     import ProxOp
 
-    op = ProxOp.L1(0.9) # Keep ~10 %
+    a = np.random.rand(100,1)
+    a /= norm(a)
+    op = ProxOp.L1(0.1) # Remove variables smaller than 0.1
+    b = op.prox(a, 0)
+    print "Norm2:",norm(b)
+    print "Norm1:",norm1(b)
+    print "Norm0:",norm0(b)
 
-    op = ProxOp.L1_binsearch(1) # Enforces |x|_1 <= s = 1, by finding lambda
+    op = ProxOp.L1_binsearch(0.7) # Enforces |x|_1 <= s = 1, by finding lambda
+    b = op.prox(a, 0)
+    print "Norm2:",norm(b)
+    print "Norm1:",norm1(b)
+    print "Norm0:",norm0(b)
 
-    op = ProxOp.L0_binsearch(10) # Keep 10 variables, by finding lambda
+    op = ProxOp.L0_binsearch(40) # Keep 10 variables, by finding a lambda
+    b = op.prox(a, 0)
+    print "Norm2:",norm(b)
+    print "Norm1:",norm1(b)
+    print "Norm0:",norm0(b)
 
-    op = ProxOp.L0_by_count(10) # Keep the 10 absolute largest variables
-
-#    a = np.random.rand(10,1)
-#    b = op.prox(a, 0)
-
-#    print a
-#    print b
-#    print norm(a)
-#    print norm1(b)
-#    print norm0(b)
+    op = ProxOp.L0_by_count(40) # Keep the 10 absolute largest variables
+    b = op.prox(a, 0)
+    print "Norm2:",norm(b)
+    print "Norm1:",norm1(b)
+    print "Norm0:",norm0(b)
 
 if __name__ == "__main__":
     test_ProxOp()

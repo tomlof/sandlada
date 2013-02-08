@@ -12,11 +12,12 @@ Created on Thu Feb 8 09:22:00 2013
 @license: BSD Style
 """
 
-import numpy as np
+import numpy as _np
 from numpy.linalg import norm
 
 __all__ = ['norm', 'norm1', 'norm0', 'TOLERANCE', 'MAX_ITER']
 
+# Settings
 TOLERANCE = 5e-7
 MAX_ITER  = 500
 
@@ -24,4 +25,4 @@ def norm1(x):
     return norm(x, ord = 1)
 
 def norm0(x):
-    return np.count_nonzero(np.absolute(x))
+    return _np.count_nonzero(_np.absolute(x))

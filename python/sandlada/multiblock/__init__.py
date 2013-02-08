@@ -11,7 +11,7 @@ from .multiblock import center
 from .multiblock import scale
 from .multiblock import direct
 
-from .multiblock import ProxOp
+from .multiblock import prox_op
 
 __all__ = ['PCA', 'SVD', 'PLSR', 'PLSC', 'center', 'scale', 'direct',
-           'ProxOp']
+           'prox_op']

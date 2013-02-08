@@ -38,42 +38,6 @@ _RGCCA      = "RGCCA"
 _NIPALS     = "NIPALS"
 
 
-def _NIPALS_PCA(X, soft_threshold = 0, max_iter = _MAXITER,
-                tolerance = _TOLERANCE, **kwargs):
-
-    if not isinstance(soft_threshold, (tuple, list)):
-        l = soft_threshold
-    else:
-        l = soft_threshold[0]
-
-    if isinstance(X, (tuple, list)):
-        X = X[0]
-
-    p = _start_vector(X, largest = True)
-    XX = dot(X.T, X)
-
-    iterations = 0
-    while True:
-
-        p_ = dot(XX, p)
-        if l > 0:
-            p = _soft_threshold(p, l, copy = False)
-        p_ = p_ / norm(p_)
-
-        diff = p - p_
-        p = p_
-        if dot(diff.T, diff) < tolerance:
-            break
-
-        iterations += 1
-        if iterations >= max_iter:
-            warnings.warn('Maximum number of iterations reached '
-                          'before convergence')
-            break
-
-    return [p]
-
-
 # TODO: Make these algorithms nicely OO!
 def _NIPALS(X, C, mode, scheme, not_normed = [], soft_threshold = 0,
             max_iter = _MAXITER, tolerance = _TOLERANCE, **kwargs):
