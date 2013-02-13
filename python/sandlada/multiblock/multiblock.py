@@ -7,7 +7,8 @@ latent variable methods that all are computed using the NIPALS algorithm.
 # Author: Tommy Löfstedt <tommy.loefstedt@cea.fr>
 # License: BSD Style.
 
-__all__ = ['PCAfast','PCA', 'SVD', 'PLSR', 'PLSC', 'center', 'scale', 'direct']
+__all__ = ['PCA', 'SVD', 'EIGSym', 'PLSR', 'PLSC', 'O2PLS'
+           'center', 'scale', 'direct']
 
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
 from sklearn.utils import check_arrays
@@ -15,402 +16,44 @@ from sklearn.utils import check_arrays
 import abc
 import warnings
 import numpy as np
-#from scipy import linalg
-from numpy.linalg import norm
-from numpy import dot
-
-# Settings
-_MAXITER    = 500
-_TOLERANCE  = 5e-7
-
-# NIPALS mode
-_NEWA       = "NewA"
-_A          = "A"
-_B          = "B"
-
-# Inner weighting schemes
-_HORST      = "Horst"
-_CENTROID   = "Centroid"
-_FACTORIAL  = "Factorial"
-
-# Available algorithms
-_RGCCA      = "RGCCA"
-_NIPALS     = "NIPALS"
+from sandlada.utils import *
+import prox_op
+import algorithms
+from algorithms import NEWA, A, B
+from algorithms import HORST, CENTROID, FACTORIAL
 
 
-# TODO: Make these algorithms nicely OO!
-def _NIPALS(X, C, mode, scheme, not_normed = [], soft_threshold = 0,
-            max_iter = _MAXITER, tolerance = _TOLERANCE, **kwargs):
-    """Inner loop of the NIPALS algorithm.
-
-    Performs the NIPALS algorithm on the supplied tuple or list of numpy arrays
-    in X. This method applies for 1, 2 or more blocks.
-
-    One block would result in e.g. PCA; two blocks would result in e.g. SVD or
-    CCA; and multiblock (n > 2) would be for instance GCCA, PLS-PM or MAXDIFF.
-
-    This function uses Wold's procedure (based on Gauss-Siedel iteration) for
-    fast convergence.
-
-    Parameters
-    ----------
-    X          : A tuple or list with n numpy arrays of shape [M, N_i],
-                 i=1,...,n. These are the training set.
-
-    C          : Adjacency matrix that is a numpy array of shape [n, n]. If an
-                 element in position C[i,j] is 1, then block i and j are
-                 connected, and 0 otherwise. If C is None, then all matrices
-                 are assumed to be connected.
-
-    mode       : A tuple or list with n elements with the mode to use for a
-                 matrix. The mode is represented by a string: "A", "B" or
-                 "NewA". If mode = None, then "NewA" is used.
-
-    scheme     : The inner weighting scheme to use in the algorithm. The scheme
-                 may be "Horst", "Centroid" or "Factorial". If scheme = None,
-                 then Horst's schme is used (the inner weighting scheme is the
-                 identity).
-
-    max_iter   : The number of iteration before the algorithm is forced to
-                 stop. The default number of iterations is 500.
-
-    tolerance  : The level below which we treat numbers as zero. This is used
-                 as stop criterion in the algorithm. Smaller value will give
-                 more acurate results, but will take longer time to compute.
-                 The default tolerance is 5E-07.
-
-    not_normed : In some algorithms, e.g. PLS regression, the weights or
-                 loadings of some matrices (e.g. Y) are not normalised. This
-                 tuple or list contains the indices in X of those matrices
-                 that should not be normalised. Thus, for PLS regression, this
-                 argument would be not_normed = (2,). If not_normed = None,
-                 then all matrices are subject to normalisation of either
-                 weights or scores depending on the modes used.
-
-    soft_threshold : A tuple or list of the soft threshold level to use for
-                     each block.
-
-    Returns
-    -------
-    W          : A list with n numpy arrays of weights of shape [N_i, 1].
-    """
-
-    n = len(X)
-
-    mode           = _make_list(mode, n, _NEWA)
-    scheme         = _make_list(scheme, n, _HORST)
-    soft_threshold = _make_list(soft_threshold, n, 0)
-
-    W = []
-    for Xi in X:
-        w = _start_vector(Xi, largest = True)
-#        w = np.random.rand(Xi.shape[1],1)
-#        w /= norm(w)
-        W.append(w)
-
-    # Main NIPALS loop
-    iterations = 0
-    while True:
-        converged = True
-        for i in range(n):
-            Xi = X[i]
-            ti = dot(Xi, W[i])
-            ui = np.zeros(ti.shape)
-            for j in range(n):
-                Xj = X[j]
-                wj = W[j]
-                tj = dot(Xj, wj)
-
-                # Determine weighting scheme and compute weight
-                if scheme[i] == _HORST:
-                    eij = 1
-                elif scheme[i] == _CENTROID:
-                    eij = _sign(_corr(ti, tj))
-                elif scheme[i] == _FACTORIAL:
-                    eij = _corr(ti, tj)
-
-                # Internal estimation usin connected matrices' score vectors
-                if C[i,j] != 0 or C[j,i] != 0:
-                    ui += eij*tj
-
-            # External estimation
-            if mode[i] == _NEWA or mode[i] == _A:
-                # TODO: Ok with division here?
-                wi = dot(Xi.T, ui) / dot(ui.T, ui)
-            elif mode[i] == _B:
-                wi = dot(np.pinv(Xi), ui) # TODO: Precompute to speed up!
-
-            # Apply soft thresholding if greater-than-zero value supplied
-            if soft_threshold[i] > 0:
-                wi = _soft_threshold(wi, soft_threshold[i], copy = False)
-
-            # Normalise weight vectors according to their weighting scheme
-            if mode[i] == _NEWA and not i in not_normed:
-                # Normalise weight vector wi to unit variance
-                wi /= norm(wi)
-            elif (mode[i] == _A or mode[i] == _B) and not i in not_normed:
-                # Normalise score vector ti to unit variance
-                wi /= norm(dot(Xi, wi))
-                wi *= np.sqrt(wi.shape[0])
-
-            # Check convergence for each weight vector. They all have to leave
-            # converged = True in order for the algorithm to stop.
-            diff = wi - W[i]
-            if dot(diff.T, diff) > tolerance:
-                converged = False
-
-            # Save updated weight vector
-            W[i] = wi
-
-        if converged:
-            break
-
-        if iterations >= max_iter:
-            warnings.warn('Maximum number of iterations reached '
-                          'before convergence')
-            break
-
-        iterations += 1
-
-    return W
+## Settings
+#_MAXITER    = 500
+#_TOLERANCE  = 5e-7
 
 
-# TODO: Make a private method of BasePLS!
-def _RGCCA(X, C, tau, scheme, not_normed = [],
-           max_iter = _MAXITER, tolerance = _TOLERANCE):
-    """Inner loop of the RGCCA algorithm.
-
-    Performs the RGCCA algorithm on the supplied tuple or list of numpy arrays
-    in X. This method applies for 1, 2 or more blocks.
-
-    One block would result in e.g. PCA; two blocks would result in e.g. SVD or
-    CCA; and multiblock (n > 2) would be for instance SUMCOR, SSQCOR or SUMCOV.
-
-    Parameters
-    ----------
-    X          : A tuple or list with n numpy arrays of shape [M, N_i],
-                 i=1,...,n. These are the training set.
-
-    C          : Adjacency matrix that is a numpy array of shape [n, n]. If an
-                 element in position C[i,j] is 1, then block i and j are
-                 connected, and 0 otherwise. If C is None, then all matrices
-                 are assumed to be connected such that C has ones everywhere
-                 except for on the diagonal.:
-
-    tau        : A tuple or list with n shrinkage constants tau[i]. If tau is a
-                 single real, all matrices will use this value.
-
-    scheme     : The inner weighting scheme to use in the algorithm. The scheme
-                 may be "Horst", "Centroid" or "Factorial". If scheme = None,
-                 then Horst's scheme is used (where the inner weighting scheme
-                 is the identity).
-
-    max_iter   : The number of iteration before the algorithm is forced to
-                 stop. The default number of iterations is 500.
-
-    tolerance  : The level below which we treat numbers as zero. This is used
-                 as stop criterion in the algorithm. Smaller value will give
-                 more acurate results, but will take longer time to compute.
-                 The default tolerance is 5E-07.
-
-    not_normed : In some algorithms, e.g. PLS regression, the weights or
-                 loadings of some matrices (e.g. Y) are not normalised. This
-                 tuple or list contains the indices in X of those matrices
-                 that should not be normalised. Thus, for PLS regression, this
-                 argument would be not_normed = (2,). If not_normed = None,
-                 then all matrices are subject to normalisation of either
-                 weights or scores depending on the modes used.
-
-    Returns
-    -------
-    W          : A list with n numpy arrays of weights of shape [N_i, 1].
-    """
-
-    n = len(X)
-
-    invIXX = []
-    W      = []
-    for i in range(n):
-        Xi = X[i]
-        XX = dot(Xi.T, Xi)
-        I  = np.eye(XX.shape[0])
-
-        w  = _start_vector(Xi, largest = True)
-#        w  = np.random.rand(Xi.shape[1],1)
-#        w /= norm(w)
-
-        invIXX.append(np.linalg.pinv(tau[i]*I + ((1-tau[i])/w.shape[0])*XX))
-        invIXXw  = dot(invIXX[i], w)
-        winvIXXw = dot(w.T, invIXXw)
-        w        = invIXXw/np.sqrt(winvIXXw)
-
-        W.append(w)
-
-    # Main RGCCA loop
-    iterations = 0
-#    h = []
-    while True:
-
-#        h_ = 0
-#        for i in range(n):
-#            Xi = X[i]
-#            ti = dot(Xi, W[i])
-#            for j in range(n):
-#                tj = dot(X[j], W[j])
+#def _soft_threshold(w, l, copy = True):
+#    worig = w.copy()
+#    lorig = l
 #
-#                c = _cov(ti, tj)
+#    warn = False
+#    while True:
+#        sign = np.sign(worig)
+#        if copy:
+#            w = np.absolute(worig) - l
+#        else:
+#            np.absolute(worig, w)
+#            w -= l
+#            w[w < 0] = 0
+#        w = np.multiply(sign,w)
 #
-#                # Determine weighting scheme and compute weight
-#                if scheme == _HORST:
-#                    pass
-#                elif scheme == _CENTROID:
-#                    c = np.abs(c)
-#                elif scheme == _FACTORIAL:
-#                    c = c*c
+#        if np.linalg.norm(w) > _TOLERANCE:
+#            break
+#        else:
+#            warn = True
+#            # TODO: Can this be improved?
+#            l *= 0.9 # Reduce by 10 % until at least one variable is significant
 #
-#                h_ += C[i,j]*c
-#        h.append(h_)
-
-        converged = True
-        for i in range(n):
-            Xi = X[i]
-            ti = dot(Xi, W[i])
-            ui = np.zeros(ti.shape)
-            for j in range(n):
-                tj = dot(X[j], W[j])
-
-                # Determine weighting scheme and compute weight
-                if scheme == _HORST:
-                    eij = 1
-                elif scheme == _CENTROID:
-                    eij = _sign(_cov(ti, tj))
-                elif scheme == _FACTORIAL:
-                    eij = _cov(ti, tj)
-
-                # Internal estimation using connected matrices' score vectors
-                if C[i,j] != 0 or C[j,i] != 0:
-                    ui += eij*tj
-
-            # Outer estimation for block i
-            wi = dot(Xi.T, ui)
-            invIXXw  = dot(invIXX[i], wi)
-            # Should we normalise?
-            if not i in not_normed:
-                winvIXXw = dot(wi.T, invIXXw)
-                wi        = invIXXw / np.sqrt(winvIXXw)
-            else:
-                wi        = invIXXw
-
-            # Check convergence for each weight vector. They all have to leave
-            # converged = True in order for the algorithm to stop.
-            diff = wi - W[i]
-            if dot(diff.T, diff) > tolerance:
-                converged = False
-
-            # Save updated weight vector
-            W[i] = wi
-
-        if converged:
-            break
-
-        if iterations >= max_iter:
-            warnings.warn('Maximum number of iterations reached '
-                          'before convergence')
-            break
-
-        iterations += 1
-
-    return W
-
-
-def _soft_threshold(w, l, copy = True):
-    worig = w.copy()
-    lorig = l
-
-    warn = False
-    while True:
-        sign = np.sign(worig)
-        if copy:
-            w = np.absolute(worig) - l
-        else:
-            np.absolute(worig, w)
-            w -= l
-            w[w < 0] = 0
-        w = np.multiply(sign,w)
-
-        if np.linalg.norm(w) > _TOLERANCE:
-            break
-        else:
-            warn = True
-            # TODO: Can this be improved?
-            l *= 0.9 # Reduce by 10 % until at least one variable is significant
-
-    if warn:
-        warnings.warn('Soft threshold was too large (all variables purged).'\
-                ' Threshold reset to %f (was %f)' % (l, lorig))
-    return w
-
-
-def _make_list(a, n, default = None):
-    # If a list, but empty
-    if isinstance(a, (tuple, list)) and len(a) == 0:
-        a = None
-    # If only one value supplied, create a list with that value
-    if a != None:
-        if not isinstance(a, (tuple, list)):
-            a = [a for i in xrange(n)]
-    else: # None or empty list supplied, create a list with the default value
-        a = [default for i in xrange(n)]
-    return a
-
-
-def _start_vector(X, random = True, ones = False, largest = False):
-    if largest: # Using row with largest sum of squares
-        idx = np.argmax(np.sum(X**2, axis=1))
-        w = X[[idx],:].T
-    elif ones:
-        w = np.ones((X.shape[1],1))
-    else: # random start vector
-        w = np.random.rand(X.shape[1],1)
-
-    w /= norm(w)
-    return w
-
-
-def _sign(v):
-    if v < 0:
-        return -1
-    else:
-        return 1
-
-
-def _corr(a,b):
-    ma = np.mean(a)
-    mb = np.mean(b)
-
-    a_ = a - ma
-    b_ = b - mb
-
-    norma = norm(a_)
-    normb = norm(b_)
-
-    if norma < _TOLERANCE or normb < _TOLERANCE:
-        return 0
-
-    ip = dot(a_.T, b_)
-    return ip / (norma * normb)
-
-
-def _cov(a,b):
-    ma = np.mean(a)
-    mb = np.mean(b)
-
-    a_ = a - ma
-    b_ = b - mb
-
-    ip = dot(a_.T, b_)
-
-    return ip[0,0] / (a_.shape[0] - 1)
+#    if warn:
+#        warnings.warn('Soft threshold was too large (all variables purged).'\
+#                ' Threshold reset to %f (was %f)' % (l, lorig))
+#    return w
 
 
 def center(X, return_means = False, copy = True):
@@ -471,7 +114,7 @@ def scale(X, centered = True, return_stds = False, copy = True):
         else:
             ddof = 0
         std = X[i].std(axis = 0, ddof = ddof)
-        std[std < _TOLERANCE] = 1.0
+        std[std < TOLERANCE] = 1.0
         if copy:
             X[i] = X[i] / std
         else:
@@ -538,26 +181,26 @@ def direct(W, T = None, P = None, compare = False):
 class BasePLS(BaseEstimator, TransformerMixin):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, C = None, num_comp = 2, tau = None,
+    def __init__(self, adj_matrix = None, num_comp = 2, tau = None,
                  center = True, scale = True, mode = None, scheme = None,
                  not_normed = None, copy = True, normalise_directions = False,
-                 max_iter = _MAXITER, tolerance = _TOLERANCE,
-                 soft_threshold = 0):
+                 max_iter = MAX_ITER, tolerance = TOLERANCE,
+                 prox_op = prox_op.ProxOp()):
 
         # Supplied by the user
-        self.C              = C
-        self.num_comp       = num_comp
-        self.tau            = tau
-        self.center         = center
-        self.scale          = scale
-        self.mode           = mode
-        self.scheme         = scheme
-        self.not_normed     = not_normed
-        self.copy           = copy
-        self.max_iter       = max_iter
-        self.tolerance      = tolerance
-        self.normal_dir     = normalise_directions
-        self.soft_threshold = soft_threshold
+        self.adj_matrix = adj_matrix
+        self.num_comp   = num_comp
+        self.tau        = tau
+        self.center     = center
+        self.scale      = scale
+        self.mode       = mode
+        self.scheme     = scheme
+        self.not_normed = not_normed
+        self.copy       = copy
+        self.max_iter   = max_iter
+        self.tolerance  = tolerance
+        self.normal_dir = normalise_directions
+        self.prox_op    = prox_op
 
 
     @abc.abstractmethod
@@ -566,7 +209,7 @@ class BasePLS(BaseEstimator, TransformerMixin):
 
 
     def _algorithm(self, *args, **kwargs):
-        return _NIPALS(*args, **kwargs)
+        return algorithms.NIPALS(*args, **kwargs)
 
 
     def _deflate(self, X, w, t, p, index = None):
@@ -575,31 +218,33 @@ class BasePLS(BaseEstimator, TransformerMixin):
 
     def _check_inputs(self, X):
 
+        if not hasattr(self, "n"):
+            self.n = len(X)
         if self.n < 1:
             raise ValueError('At least one matrix must be given')
 
         err_msg = 'The mode must be either "%s", "%s" or "%s"' \
-                    % (_NEWA, _A, _B)
+                    % (NEWA, A, B)
         if self.mode == None:
-            self.mode = [_NEWA]*self.n # Default mode is New A
+            self.mode = [NEWA]*self.n # Default mode is New A
         if not isinstance(self.mode, (tuple, list)):
-            if not self.mode in (_NEWA, _A, _B):
+            if not self.mode in (NEWA, A, B):
                 raise ValueError(err_msg)
             self.mode = [self.mode]*self.n # If only one mode is given, all matrices gets this mode
         for m in self.mode:
-            if not m in (_NEWA, _A, _B):
+            if not m in (NEWA, A, B):
                 raise ValueError(err_msg)
 
         err_msg = 'The scheme must be either "%s", "%s" or "%s"' \
-                    % (_HORST, _CENTROID, _FACTORIAL)
+                    % (HORST, CENTROID, FACTORIAL)
         if self.scheme == None:
-            self.scheme = [_HORST]*self.n # Default scheme is Horst
+            self.scheme = [HORST]*self.n # Default scheme is Horst
         if not isinstance(self.scheme, (tuple, list)):
-            if not self.scheme in (_HORST, _CENTROID, _FACTORIAL):
+            if not self.scheme in (HORST, CENTROID, FACTORIAL):
                 raise ValueError(err_msg)
             self.scheme = [self.scheme]*self.n
         for s in self.scheme:
-            if not s in (_HORST, _CENTROID, _FACTORIAL):
+            if not s in (HORST, CENTROID, FACTORIAL):
                 raise ValueError(err_msg)
 
         # TODO: Add Schäfer and Strimmer's method here if tau == None!
@@ -643,13 +288,8 @@ class BasePLS(BaseEstimator, TransformerMixin):
             self.not_normed = ()
 
         # Number of rows
-        try:
-            M = X[0].shape[0]
-        except:
-            print "Here!"
-            print X
+        M = X[0].shape[0]
         minN = float('Inf')
-
         for i in xrange(self.n):
             if X[i].ndim == 1:
                 X[i] = X[i].reshape((X[i].size, 1))
@@ -662,17 +302,24 @@ class BasePLS(BaseEstimator, TransformerMixin):
 
             minN = min(minN, X[i].shape[1])
 
-        if self.num_comp < 1:
-            raise ValueError('Invalid number of components')
-        if self.num_comp > minN:
-            warnings.warn('Too many components! No more than %d can be '
-                          'computed' % (minN,))
-            self.num_comp = minN
+        if isinstance(self.num_comp, (tuple, list)):
+            comps = self.num_comp
+        else:
+            comps = [self.num_comp]
+        for i in xrange(len(comps)):
+            if comps[i] < 1:
+                raise ValueError('Invalid number of components')
+            if comps[i] > minN:
+                warnings.warn('Too many components! No more than %d can be '
+                              'computed' % (minN,))
+                comps[i] = minN
+        if not isinstance(self.num_comp, (tuple, list)):
+            self.num_comp = comps[0]
 
-        if self.C == None and self.n == 1:
-            self.C = np.ones((1,1))
-        elif self.C == None and self.n > 1:
-            self.C = np.ones((self.n,self.n)) - np.eye(self.n)
+        if self.adj_matrix == None and self.n == 1:
+            self.adj_matrix = np.ones((1,1))
+        elif self.adj_matrix == None and self.n > 1:
+            self.adj_matrix = np.ones((self.n,self.n)) - np.eye(self.n)
 
 
     def _preprocess(self, X):
@@ -724,14 +371,13 @@ class BasePLS(BaseEstimator, TransformerMixin):
         for a in xrange(self.num_comp):
             # Inner loop, weight estimation
             w = self._algorithm(X = X,
-                                C = self.C,
+                                adj_matrix = self.adj_matrix,
                                 tau = self.tau,
                                 mode = self.mode,
                                 scheme = self.scheme,
                                 max_iter = self.max_iter,
                                 tolerance = self.tolerance,
-                                not_normed = self.not_normed,
-                                soft_threshold = self.soft_threshold)
+                                not_normed = self.not_normed)
 
             # Compute scores and loadings
             for i in xrange(self.n):
@@ -800,7 +446,7 @@ class BasePLS(BaseEstimator, TransformerMixin):
 class PCA(BasePLS):
 
     def __init__(self, **kwargs):
-        BasePLS.__init__(self, C = np.ones((1,1)), **kwargs)
+        BasePLS.__init__(self, adj_matrix = np.ones((1,1)), **kwargs)
 
     def _get_transform(self, index = 0):
         return self.P
@@ -821,19 +467,21 @@ class PCA(BasePLS):
         return self.fit(X[0], **fit_params).transform(X[0])
 
 
-class PCAfast(PCA):
+class SVD(PCA):
+    """Performs the singular value decomposition.
+    
+    The decomposition generates matrices such that
+    
+        dot(U, dot(S, V)) == X
+    """
 
     def __init__(self, **kwargs):
-        PCA.__init__(self, **kwargs)
+        center = kwargs.pop("center", False)
+        scale  = kwargs.pop("scale",  False)
+        PCA.__init__(self, center = center, scale = scale, **kwargs)
 
     def _algorithm(self, *args, **kwargs):
-        return _NIPALS_PCA(*args, **kwargs)
-
-
-class SVD(PCA):
-
-    def __init__(self, **kwargs):
-        PCA.__init__(self, **kwargs)
+        return algorithms.NIPALS_PCA(*args, **kwargs)
 
     def _get_transform(self, index = 0):
         return self.V
@@ -848,6 +496,27 @@ class SVD(PCA):
         self.V = self.P
         del self.T
         del self.P
+
+        return self
+
+
+class EIGSym(SVD):
+    """Performs the eigenvalue decomposition of a symmetric matrix.
+
+    The decomposition generates matrices such that
+
+        dot(V, dot(D, V.T)) == X
+    """
+
+    def __init__(self, **kwargs):
+        SVD.__init__(self, **kwargs)
+
+    def fit(self, *X, **kwargs):
+        SVD.fit(self, X[0])
+        self.D = self.S
+
+        del self.U
+        del self.S
 
         return self
 
@@ -921,7 +590,7 @@ class PLSR(BasePLS, RegressorMixin):
 class PLSC(PLSR):
 
     def __init__(self, **kwargs):
-        BasePLS.__init__(self, mode = _NEWA, scheme = _HORST, **kwargs)
+        BasePLS.__init__(self, mode = NEWA, scheme = HORST, **kwargs)
 
     def _get_transform(self, index = 0):
         if index < 0 or index > 1:
@@ -932,7 +601,7 @@ class PLSC(PLSR):
             return self.Cs
 
     def _deflate(self, X, w, t, p, index = None):
-        return X - dot(t, p.T) # Deflate X using its loadings
+        return X - dot(t, p.T) # Deflate using their loadings
 
     def fit(self, X, Y = None, **kwargs):
         Y = kwargs.get('y', Y)
@@ -962,6 +631,99 @@ class PLSC(PLSR):
             return Ypred, Xpred
 
         return Ypred
+
+
+class O2PLS(PLSC):
+
+    def __init__(self, **kwargs):
+        PLSC.__init__(self, **kwargs)
+
+    def fit(self, X, Y = None, **kwargs):
+
+        Y = kwargs.get('y', Y)
+        self.num_comp = kwargs.pop("num_comp", self.num_comp)
+
+        # Copy since this will contain the residual (deflated) matrices
+        X = check_arrays(X, Y, dtype = np.float, copy = self.copy,
+                         sparse_format = 'dense')
+
+        self._check_inputs(X)
+        X = self._preprocess(X)
+
+        Y = X[1]
+        X = X[0]
+
+        A  = self.num_comp[0]
+        Ax = self.num_comp[1]
+        Ay = self.num_comp[2]
+
+        # Results matrices
+        M, N1 = X.shape
+        M, N2 = Y.shape
+        self.Wo = np.zeros((N1, Ax))
+        self.To = np.zeros((M,  Ax))
+        self.Po = np.zeros((N1, Ax))
+        self.Co = np.zeros((N1, Ay))
+        self.Uo = np.zeros((M,  Ay))
+        self.Qo = np.zeros((N1, Ay))
+
+        svd = SVD(num_comp = A)
+        svd.fit(dot(X.T, Y))
+        W = svd.U
+        C = svd.V
+
+        eigsym = EIGSym(num_comp = 1)
+        for a in xrange(Ax):
+            T  = dot(X, W)
+            E  = X - dot(T, W.T)
+            TE = dot(T.T, E)
+            eigsym.fit(dot(TE.T, TE))
+            wo = eigsym.V
+            to = dot(X, wo)
+            po = dot(X.T, to) / dot(to.T, to)
+
+            self.Wo[:,a] = wo.ravel()
+            self.To[:,a] = to.ravel()
+            self.Po[:,a] = po.ravel()
+
+            X -= dot(to, po.T)
+
+        for a in xrange(Ay):
+            U  = dot(Y, C)
+            F  = Y - dot(U, C.T)
+            UF = dot(U.T, F)
+            eigsym.fit(dot(UF.T, UF))
+            co = eigsym.V
+            uo = dot(Y, co)
+            qo = dot(Y.T, uo) / dot(uo.T, uo)
+
+            self.Co[:,a] = co.ravel()
+            self.Uo[:,a] = uo.ravel()
+            self.Qo[:,a] = qo.ravel()
+
+            Y -= dot(uo, qo.T)
+
+        num_comp = self.num_comp
+        self.num_comp = A
+        PLSC.fit(self, X, Y)
+        self.num_comp = num_comp
+
+        return self
+
+    def transform(self, X, Y = None, **kwargs):
+        Y = kwargs.get('y', Y)
+        if Y != None:
+            To = dot(X, self.Wo)
+            X = X - dot(To, self.Po)
+            Uo = dot(Y, self.Co)
+            Y = Y - dot(Uo, self.Qo)
+            T = PLSC.transform(self, X, Y, **kwargs)
+        else:
+            To = dot(X, self.Wo)
+            X = X - dot(To, self.Po)
+            T = PLSC.transform(self, X, **kwargs)
+            T = T[0]
+        return T
 
 
 #class CCA(BasePLS):

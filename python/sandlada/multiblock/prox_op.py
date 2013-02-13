@@ -13,7 +13,7 @@ Created on Thu Feb 7 11:50:00 2013
 #import abc
 import warnings
 import numpy as np
-from util import *
+from sandlada.utils import *
 
 class ProxOp(object):
     """Baseclass for proximal operators.

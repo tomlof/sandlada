@@ -4,8 +4,8 @@
 @author: edouard.duchesnay@gmail.com
 """
 
-import util
 import multiblock
 import structured_learning
+import utils
 
-__all__ = ['util', 'multiblock', 'structured_learning']
+__all__ = ['multiblock', 'structured_learning', 'utils']
