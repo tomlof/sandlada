@@ -371,13 +371,28 @@ class BasePLS(BaseEstimator, TransformerMixin):
         for a in xrange(self.num_comp):
             # Inner loop, weight estimation
             w = self._algorithm(X = X,
-                                adj_matrix = self.adj_matrix,
                                 tau = self.tau,
                                 mode = self.mode,
                                 scheme = self.scheme,
+                                prox_op = self.prox_op,
                                 max_iter = self.max_iter,
                                 tolerance = self.tolerance,
-                                not_normed = self.not_normed)
+                                not_normed = self.not_normed,
+                                adj_matrix = self.adj_matrix)
+
+#            self.adj_matrix = adj_matrix
+#            self.num_comp   = num_comp
+#            self.tau        = tau
+#            self.center     = center
+#            self.scale      = scale
+#            self.mode       = mode
+#            self.scheme     = scheme
+#            self.not_normed = not_normed
+#            self.copy       = copy
+#            self.max_iter   = max_iter
+#            self.tolerance  = tolerance
+#            self.normal_dir = normalise_directions
+#            self.prox_op    = prox_op
 
             # Compute scores and loadings
             for i in xrange(self.n):
@@ -480,8 +495,8 @@ class SVD(PCA):
         scale  = kwargs.pop("scale",  False)
         PCA.__init__(self, center = center, scale = scale, **kwargs)
 
-    def _algorithm(self, *args, **kwargs):
-        return algorithms.NIPALS_PCA(*args, **kwargs)
+#    def _algorithm(self, *args, **kwargs):
+#        return algorithms.NIPALS_PCA(*args, **kwargs)
 
     def _get_transform(self, index = 0):
         return self.V
@@ -641,7 +656,9 @@ class O2PLS(PLSC):
     def fit(self, X, Y = None, **kwargs):
 
         Y = kwargs.get('y', Y)
-        self.num_comp = kwargs.pop("num_comp", self.num_comp)
+        self.num_comp  = kwargs.pop("num_comp",  self.num_comp)
+        self.max_iter  = kwargs.pop("max_iter",  self.max_iter)
+        self.tolerance = kwargs.pop("tolerance", self.tolerance)
 
         # Copy since this will contain the residual (deflated) matrices
         X = check_arrays(X, Y, dtype = np.float, copy = self.copy,
@@ -667,13 +684,15 @@ class O2PLS(PLSC):
         self.Uo = np.zeros((M,  Ay))
         self.Qo = np.zeros((N2, Ay))
 
-        svd = SVD(num_comp = A)
+        svd = SVD(num_comp = A, tolerance = self.tolerance,
+                  max_iter = self.max_iter, **kwargs)
         svd.fit(dot(X.T, Y))
         W = svd.U
         C = svd.V
 
 #        eigsym = EIGSym(num_comp = 1)
-        eigsym = SVD(num_comp = 1)
+        eigsym = SVD(num_comp = 1, tolerance = self.tolerance,
+                     max_iter = self.max_iter, **kwargs)
         for a in xrange(Ax):
             T  = dot(X, W)
             E  = X - dot(T, W.T)
@@ -681,8 +700,16 @@ class O2PLS(PLSC):
 #            eigsym.fit(dot(TE.T, TE))
             eigsym.fit(TE)
             wo = eigsym.V
-            to = dot(X, wo)
-            po = dot(X.T, to) / dot(to.T, to)
+            s  = eigsym.S
+            if s < self.tolerance:
+                wo = np.zeros(wo.shape)
+            to   = dot(X, wo)
+            toto = dot(to.T, to)
+            Xto  = dot(X.T, to)
+            if toto > self.tolerance:
+                po = Xto / toto
+            else:
+                po = np.zeros(Xto.shape)
 
             self.Wo[:,a] = wo.ravel()
             self.To[:,a] = to.ravel()
@@ -697,8 +724,16 @@ class O2PLS(PLSC):
 #            eigsym.fit(dot(UF.T, UF))
             eigsym.fit(UF)
             co = eigsym.V
-            uo = dot(Y, co)
-            qo = dot(Y.T, uo) / dot(uo.T, uo)
+            s  = eigsym.S
+            if s < self.tolerance:
+                co = np.zeros(co.shape)
+            uo   = dot(Y, co)
+            uouo = dot(uo.T, uo)
+            Yuo  = dot(Y.T, uo)
+            if uouo > self.tolerance:
+                qo = Yuo / uouo
+            else:
+                qo = np.zeros(Yuo.shape)
 
             self.Co[:,a] = co.ravel()
             self.Uo[:,a] = uo.ravel()
@@ -708,7 +743,7 @@ class O2PLS(PLSC):
 
         num_comp = self.num_comp
         self.num_comp = A
-        PLSC.fit(self, X, Y)
+        PLSC.fit(self, X, Y, **kwargs)
         self.num_comp = num_comp
 
         return self

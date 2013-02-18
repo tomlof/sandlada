@@ -3,6 +3,7 @@ from numpy import dot
 from sandlada.utils import *
 from sandlada.utils.testing import *
 from sandlada.multiblock import *
+import sandlada.multiblock.prox_op as prox_op
 from sklearn.datasets import load_linnerud
 
 import sklearn.pls as pls
@@ -13,8 +14,10 @@ from sklearn.pls import CCA
 from sklearn.pls import PLSSVD
 from sklearn.pls import _center_scale_xy
 
+
 def test_multiblock():
 
+    test_SVD_PCA()
     test_eigsym()
     test_o2pls()
 
@@ -165,6 +168,148 @@ def test_o2pls():
 
 
 
+    np.random.seed(42)
+
+    # Test primal version
+    X = np.random.rand(10,5)
+    Y = np.random.rand(10,5)
+
+    X = center(X)
+    Y = center(Y)
+
+#    print X
+#    print Y
+
+    o2pls = O2PLS(num_comp = [3, 2, 2], center = False, scale = False,
+                  tolerance = 5e-12)
+    o2pls.fit(X, Y)
+
+    Xhat = dot(o2pls.T, o2pls.P.T) + dot(o2pls.To, o2pls.Po.T)
+    assert_array_almost_equal(X, Xhat, decimal=5, err_msg="O2PLS does not" \
+            " give a correct reconstruction of X")
+    Yhat = dot(o2pls.U, o2pls.Q.T) + dot(o2pls.Uo, o2pls.Qo.T)
+    assert_array_almost_equal(Y, Yhat, decimal=5, err_msg="O2PLS does not" \
+            " give a correct reconstruction of Y")
+
+    W  = np.asarray([[ 0.28574946790251, 0.80549463591904, 0.46033811220009],
+                     [-0.82069177928760, 0.03104339272344, 0.41068049575333],
+                     [ 0.23145983182932,-0.45751789277098, 0.78402240214039],
+                     [-0.04763457200240, 0.32258037076527,-0.04720569565472],
+                     [ 0.43470626726892,-0.19192181081164, 0.05010836360956]])
+    W, o2pls.W = direct(W, o2pls.W, compare = True)
+    assert_array_almost_equal(W, o2pls.W, decimal=5, err_msg="O2PLS does not" \
+            " give the correct weights in X")
+
+    C  = np.asarray([[ 0.33983623057749,-0.08643744675915, 0.61598479965533],
+                     [-0.21522532354066, 0.76365073948393,-0.04894422260217],
+                     [-0.80644847592354,-0.40113340935286, 0.35039634003963],
+                     [-0.39193158427033, 0.44086245939825, 0.16315472674870],
+                     [-0.18498617630960,-0.23259061820651,-0.68466789737349]])
+    C, o2pls.C = direct(C, o2pls.C, compare = True)
+    assert_array_almost_equal(C, o2pls.C, decimal=5, err_msg="O2PLS does not" \
+            " give the correct weights in Y")
+
+    Wo = np.asarray([[ 0.09275972900527, 0.22138222202790],
+                     [-0.32377665878465, 0.22806033590264],
+                     [ 0.13719457299956,-0.32185438652509],
+                     [-0.48063246869535,-0.81267269197421],
+                     [-0.79795638168787, 0.36735710766490]])
+    Wo, o2pls.Wo = direct(Wo, o2pls.Wo, compare = True)
+    assert_array_almost_equal(Wo, o2pls.Wo, decimal=5, err_msg="O2PLS does not" \
+            " give the correct unique weights in X")
+
+    Co = np.asarray([[-0.28602514350110,-0.64481954689928],
+                     [ 0.41206605980471,-0.44533317148328],
+                     [ 0.21923094429525,-0.13376487405816],
+                     [-0.75775220257515, 0.22632291041065],
+                     [-0.35516274044178,-0.56282414394259]])
+    Co, o2pls.Co = direct(Co, o2pls.Co, compare = True)
+    assert_array_almost_equal(Co, o2pls.Co, decimal=5, err_msg="O2PLS does not" \
+            " give the correct unique weights in Y")
+
+
+
+    np.random.seed(43)
+
+    # Test dual version
+    X = np.random.rand(5,10)
+    Y = np.random.rand(5,10)
+
+    X = center(X)
+    Y = center(Y)
+
+#    print X
+#    print Y
+
+    o2pls = O2PLS(num_comp = [3, 2, 2], center = False, scale = False,
+                  tolerance = 5e-12)
+    o2pls.fit(X, Y)
+
+    Xhat = dot(o2pls.T, o2pls.P.T) + dot(o2pls.To, o2pls.Po.T)
+    assert_array_almost_equal(X, Xhat, decimal=5, err_msg="O2PLS does not" \
+            " give a correct reconstruction of X")
+    Yhat = dot(o2pls.U, o2pls.Q.T) + dot(o2pls.Uo, o2pls.Qo.T)
+    assert_array_almost_equal(Y, Yhat, decimal=5, err_msg="O2PLS does not" \
+            " give a correct reconstruction of Y")
+
+    W = np.asarray([[ 0.660803597278207, 0.283434091506369,-0.101117338537766],
+                    [ 0.199245987632961,-0.371782870650567,-0.105580628700634],
+                    [ 0.049056826578120, 0.510007873722491,-0.052587642609540],
+                    [ 0.227075734276342, 0.321380074146550, 0.386973037543944],
+                    [-0.366361672688720, 0.047162463451118,-0.513205123937845],
+                    [-0.231028371367863,-0.053688420486769, 0.613919597967758],
+                    [-0.441503068093162, 0.531948476266181, 0.122002207828563],
+                    [ 0.155295133662634,-0.243203951406354, 0.327486426731878],
+                    [ 0.177637796765300, 0.210455027475178, 0.022448447240951],
+                    [ 0.177420328030713, 0.162892673626251,-0.251399720667828]])
+    W, o2pls.W = direct(W, o2pls.W, compare = True)
+    assert_array_almost_equal(W, o2pls.W, decimal=5, err_msg="O2PLS does not" \
+            " give the correct weights in X")
+
+    C = np.asarray([[ 0.029463187629622, 0.343448566391335, 0.439488969936543],
+                    [-0.308514636956793, 0.567738611008308, 0.288894827826079],
+                    [-0.041368032721661, 0.240281903256231,-0.165061925028986],
+                    [ 0.507488061231666, 0.220214013827959,-0.197749809945398],
+                    [-0.032831353872698,-0.456872251088426, 0.330712836574687],
+                    [-0.088465736946256, 0.137459131512888,-0.199716885766439],
+                    [ 0.575982215268074, 0.265756602507649, 0.284152520405287],
+                    [-0.174758650490361,-0.236798361028871, 0.559859131854712],
+                    [ 0.474892087711923,-0.156220599204360, 0.286373509842812],
+                    [-0.219026289120523, 0.273412086540475, 0.177725330447690]])
+    C, o2pls.C = direct(C, o2pls.C, compare = True)
+    assert_array_almost_equal(C, o2pls.C, decimal=5, err_msg="O2PLS does not" \
+            " give the correct weights in Y")
+
+    Wo = np.asarray([[-0.072619636061551, 0],
+                     [-0.186139609163295, 0],
+                     [-0.193345377028291, 0],
+                     [-0.416556339157776, 0],
+                     [-0.556155354111327, 0],
+                     [ 0.042355493010538, 0],
+                     [ 0.170141007666872, 0],
+                     [-0.158346774720306, 0],
+                     [-0.079654387080921, 0],
+                     [ 0.614579177338253, 0]])
+    Wo, o2pls.Wo = direct(Wo, o2pls.Wo, compare = True)
+    assert_array_almost_equal(Wo, o2pls.Wo, decimal=5, err_msg="O2PLS does not" \
+            " give the correct unique weights in X")
+
+    Co = np.asarray([[-0.143370887251568, 0],
+                     [ 0.268379847579299, 0],
+                     [ 0.538254868418912, 0],
+                     [-0.076765726998542, 0],
+                     [ 0.011841641465690, 0],
+                     [-0.682168209668947, 0],
+                     [-0.047632336295968, 0],
+                     [-0.032431712285857, 0],
+                     [ 0.059518204830295, 0],
+                     [-0.373428712071223, 0]])
+    Co, o2pls.Co = direct(Co, o2pls.Co, compare = True)
+    assert_array_almost_equal(Co, o2pls.Co, decimal=5, err_msg="O2PLS does not" \
+            " give the correct unique weights in Y")
+
+
+
 def test_eigsym():
 
     d = load_linnerud()
@@ -191,6 +336,168 @@ def test_eigsym():
     V, eig.V = direct(V, eig.V, compare = True)
     assert_array_almost_equal(V, eig.V, decimal=5, err_msg="EIGSym does not" \
             " give the correct eigenvectors")
+
+
+
+def test_SVD_PCA():
+
+    # Assure same answer every time
+    np.random.seed(42)
+
+    # Compare SVD with and without sparsity constraint to numpy.linalg.svd
+    Xtr = np.random.rand(6,6)
+    #Xte = np.random.rand(2,6)
+    num_comp = 3
+    tol = 5e-12
+
+    Xtr, m = center(Xtr, return_means = True)
+    Xtr, s = scale(Xtr, return_stds = True)
+    #Xte = (Xte - m) / s
+
+    for st in [0.1, 0.01, 0.001, 0.0001, 0]:
+        # multiblock.SVD
+        svd = SVD(num_comp = num_comp, tolerance = tol, max_iter = 1000,
+                  prox_op = prox_op.L1(st))
+        svd.fit(Xtr)
+
+        # numpy.lialg.svd
+        U, S, V = np.linalg.svd(Xtr)
+        V = V.T
+        S = np.diag(S)
+        U = U[:,0:num_comp]
+        S = S[:,0:num_comp]
+        V = V[:,0:num_comp]
+        #SVDte = dot(Xte, V)
+
+        if st < tol:
+            num_decimals = 5
+        else:
+            num_decimals = int(log(1./st, 10) + 0.5)
+        svd.V, V = direct(svd.V, V, compare = True)
+        assert_array_almost_equal(svd.V, V, decimal=num_decimals-2,
+                err_msg="sklearn.NIPALS.SVD and numpy.linalg.svd implementations " \
+                "lead to different loadings")
+#        print "Comparing loadings of sklearn.NIPALS.SVD and numpy.linalg.svd... OK!"\
+#                " (diff=%.4f, threshold=%0.4f)" % (np.max(np.abs(V - svd.V)), st)
+
+
+
+    # Compare PCA with sparsity constraint to numpy.linalg.svd
+    Xtr = np.random.rand(5,5)
+    num_comp = 5
+    tol = 5e-9
+
+    Xtr, m = center(Xtr, return_means = True)
+    Xtr, s = scale(Xtr, return_stds = True)
+
+    for st in [0.1, 0.01, 0.001, 0.0001, 0]:
+        pca = PCA(center = False, scale = False, num_comp = num_comp,
+                  tolerance = tol, max_iter = 500,
+                  prox_op = prox_op.L1(st))
+        pca.fit(Xtr)
+        Tte = pca.transform(Xtr)
+        U, S, V = np.linalg.svd(Xtr)
+        V = V.T
+        US = dot(U,np.diag(S))
+        US = US[:,0:num_comp]
+        V  = V[:,0:num_comp]
+    
+#        err = np.max(np.abs(Xtr - dot(pca.T,pca.P.T)))
+
+        if st < tol:
+            num_decimals = 5
+        else:
+            num_decimals = int(log(1./st, 10) + 0.5)
+        assert_array_almost_equal(Xtr, dot(pca.T,pca.P.T), decimal = num_decimals-1,
+                err_msg="Model does not equal the matrices")
+#        print "PCA: Testing equality of model and matrix ... OK! (err=%.5f, threshold=%.4f)" % (err, st)
+
+
+
+    # Compare PCA without the sparsity constraint to numpy.linalg.svd
+    Xtr = np.random.rand(50,50)
+    Xte = np.random.rand(20,50)
+    num_comp = 3
+
+    Xtr, m = center(Xtr, return_means = True)
+    Xtr, s = scale(Xtr, return_stds = True)
+    Xte = (Xte - m) / s
+
+    pca = PCA(center = False, scale = False, num_comp = num_comp,
+                  tolerance = 5e-12, max_iter = 1000)
+    pca.fit(Xtr)
+    pca.P, pca.T = direct(pca.P, pca.T)
+    Tte = pca.transform(Xte)
+
+    U, S, V = np.linalg.svd(Xtr)
+    V = V.T
+    US = dot(U,np.diag(S))
+    US = US[:,0:num_comp]
+    V  = V[:,0:num_comp]
+    V, US = direct(V, US)
+    SVDte = dot(Xte, V)
+
+    assert_array_almost_equal(pca.P, V, decimal = 2, err_msg = "NIPALS PCA and "
+            "numpy.linalg.svd implementations lead to different loadings")
+#    print "Comparing loadings of NIPALS PCA and numpy.linalg.svd... OK! "\
+#          "(max diff = %.4f)" % np.max(np.abs(V - pca.P))
+
+    assert_array_almost_equal(pca.T, US, decimal = 2, err_msg = "NIPALS PCA and "
+            "numpy.linalg.svd implementations lead to different scores")
+#    print "Comparing scores of NIPALS PCA and numpy.linalg.svd...   OK! "\
+#          "(max diff = %.4f)" % np.max(np.abs(US - pca.T))
+
+    assert_array_almost_equal(Tte, SVDte, decimal = 2, err_msg = "NIPALS PCA and "
+            "numpy.linalg.svd implementations lead to different scores")
+#    print "Comparing test set of NIPALS PCA and numpy.linalg.svd... OK! "\
+#          "(max diff = %.4f)" % np.max(np.abs(Tte - SVDte))
+
+
+
+    # Compare PCA without the sparsity constraint to numpy.linalg.svd
+    X = np.random.rand(50,100)
+    num_comp = 50
+
+    X = center(X)
+    X = scale(X)
+
+    pca = PCA(center = False, scale = False, num_comp = num_comp,
+                  tolerance = 5e-12, max_iter = 1000)
+    pca.fit(X)
+    Xhat_1 = dot(pca.T, pca.P.T)
+
+    U, S, V = np.linalg.svd(X, full_matrices = False)
+    Xhat_2 = dot(U, dot(np.diag(S), V))
+
+    assert_array_almost_equal(X, Xhat_1, decimal = 2, err_msg = "PCA performs "
+            " a faulty reconstruction of X")
+
+    assert_array_almost_equal(Xhat_1, Xhat_2, decimal = 2, err_msg = "PCA and "
+            "numpy.linalg.svd implementations lead to different reconstructions")
+
+
+
+    # Compare PCA without the sparsity constraint to numpy.linalg.svd
+    X = np.random.rand(100,50)
+    num_comp = 50
+
+    X = center(X)
+    X = scale(X)
+
+    pca = PCA(center = False, scale = False, num_comp = num_comp,
+                  tolerance = 5e-12, max_iter = 1000)
+    pca.fit(X)
+    Xhat_1 = dot(pca.T, pca.P.T)
+
+    U, S, V = np.linalg.svd(X, full_matrices = False)
+    Xhat_2 = dot(U, dot(np.diag(S), V))
+
+    assert_array_almost_equal(X, Xhat_1, decimal = 2, err_msg = "PCA performs "
+            " a faulty reconstruction of X")
+
+    assert_array_almost_equal(Xhat_1, Xhat_2, decimal = 2, err_msg = "PCA and "
+            "numpy.linalg.svd implementations lead to different reconstructions")
+
 
 #    d = load_linnerud()
 #    X = d.data
@@ -705,117 +1012,6 @@ def test_eigsym():
 #    assert_array_almost_equal(Yhat__, Yhat, decimal=5,
 #            err_msg="NIPALS and pls implementations lead to different" \
 #            " predictions")
-#
-#
-#    # Compare SVD with and without sparsity constraint to numpy.linalg.svd
-#
-#    Xtr = np.random.rand(6,6)
-#    #Xte = np.random.rand(2,6)
-#    num_comp = 3
-#    tol = 5e-12
-#
-#    Xtr, m = pls.center(Xtr, return_means = True)
-#    Xtr, s = pls.scale(Xtr, return_stds = True)
-#    #Xte = (Xte - m) / s
-#
-#    for st in [0.1, 0.01, 0.001, 0.0001, 0]:
-#        # NIPALS.SVD
-#        svd = pls.SVD(num_comp = num_comp,
-#                      tolerance=tol, max_iter=1000, soft_threshold = st)
-#        svd.fit(Xtr)
-##        svd.V, svd.U = pls.direct(svd.V, svd.U)
-#
-#        # numpy.lialg.svd
-#        U, S, V = np.linalg.svd(Xtr)
-#        V = V.T
-#        S = np.diag(S)
-#        U = U[:,0:num_comp]
-#        S = S[:,0:num_comp]
-#        V = V[:,0:num_comp]
-##        V, U = pls.direct(V, U)
-#        #SVDte = dot(Xte, V)
-#
-#        if st < tol:
-#            num_decimals = 5
-#        else:
-#            num_decimals = int(log(1./st, 10) + 0.5)
-#        svd.V, V = pls.direct(svd.V, V, compare = True)
-#        assert_array_almost_equal(svd.V, V, decimal=num_decimals-2,
-#                err_msg="sklearn.NIPALS.SVD and numpy.linalg.svd implementations " \
-#                "lead to different loadings")
-#        print "Comparing loadings of sklearn.NIPALS.SVD and numpy.linalg.svd... OK!"\
-#                " (diff=%.4f, threshold=%0.4f)" % (np.max(np.abs(V - svd.V)), st)
-#
-#
-#    # Compare PCA with sparsity constraint to numpy.linalg.svd
-#
-#    Xtr = np.random.rand(5,5)
-#    num_comp = 5
-#    tol = 5e-9
-#
-#    Xtr, m = pls.center(Xtr, return_means = True)
-#    Xtr, s = pls.scale(Xtr, return_stds = True)
-#
-#    for st in [0.1, 0.01, 0.001, 0.0001, 0]:
-#        pca = pls.PCA(center = False, scale = False, num_comp = num_comp,
-#                  tolerance=tol, max_iter=500, soft_threshold = st)
-#        pca.fit(Xtr)
-#        Tte = pca.transform(Xtr)
-#        U, S, V = np.linalg.svd(Xtr)
-#        V = V.T
-#        US = dot(U,np.diag(S))
-#        US = US[:,0:num_comp]
-#        V  = V[:,0:num_comp]
-#    
-#        err = np.max(np.abs(Xtr - dot(pca.T,pca.P.T)))
-#
-#        if st < tol:
-#            num_decimals = 5
-#        else:
-#            num_decimals = int(log(1./st, 10) + 0.5)
-#        assert_array_almost_equal(Xtr, dot(pca.T,pca.P.T), decimal = num_decimals-1,
-#                err_msg="Model does not equal the matrices")
-#        print "PCA: Testing equality of model and matrix ... OK! (err=%.5f, threshold=%.4f)" % (err, st)
-#
-#
-#    # Compare PCA without the sparsity constraint to numpy.linalg.svd
-#
-#    Xtr = np.random.rand(50,50)
-#    Xte = np.random.rand(20,50)
-#    num_comp = 3
-#
-#    Xtr, m = pls.center(Xtr, return_means = True)
-#    Xtr, s = pls.scale(Xtr, return_stds = True)
-#    Xte = (Xte - m) / s
-#
-#    pca = pls.PCA(center = False, scale = False, num_comp = num_comp,
-#                  tolerance=5e-12, max_iter=1000)
-#    pca.fit(Xtr)
-#    pca.P, pca.T = pls.direct(pca.P, pca.T)
-#    Tte = pca.transform(Xte)
-#
-#    U, S, V = np.linalg.svd(Xtr)
-#    V = V.T
-#    US = dot(U,np.diag(S))
-#    US = US[:,0:num_comp]
-#    V  = V[:,0:num_comp]
-#    V, US = pls.direct(V, US)
-#    SVDte = dot(Xte, V)
-#
-#    assert_array_almost_equal(pca.P, V, decimal=2, err_msg="NIPALS PCA and "
-#            "numpy.linalg.svd implementations lead to different loadings")
-#    print "Comparing loadings of NIPALS PCA and numpy.linalg.svd... OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(V - pca.P))
-#
-#    assert_array_almost_equal(pca.T, US, decimal=2, err_msg="NIPALS PCA and "
-#            "numpy.linalg.svd implementations lead to different scores")
-#    print "Comparing scores of NIPALS PCA and numpy.linalg.svd...   OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(US - pca.T))
-#
-#    assert_array_almost_equal(Tte, SVDte, decimal=2, err_msg="NIPALS PCA and "
-#            "numpy.linalg.svd implementations lead to different scores")
-#    print "Comparing test set of NIPALS PCA and numpy.linalg.svd... OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(Tte - SVDte))
 
 
 

@@ -29,7 +29,9 @@ import prox_op
 from sandlada.utils import *
 
 
-__all__= ['NIPALS_PCA', 'NIPALS', 'RGCCA',
+#__all__= ['NIPALS_PCA', 'NIPALS', 'RGCCA',
+#          'NEWA', 'A', 'B', 'HORST', 'CENTROID', 'FACTORIAL']
+__all__= ['NIPALS', 'RGCCA',
           'NEWA', 'A', 'B', 'HORST', 'CENTROID', 'FACTORIAL']
 
 
@@ -87,77 +89,76 @@ def _start_vector(X, random = True, ones = False, largest = False):
 #    def __init__(**kwargs):
 #        BaseAlgorithm.__init__(self, **kwargs)
 #
-def NIPALS_PCA(X, prox_op = prox_op.ProxOp(),
-               max_iter = MAX_ITER, tolerance = TOLERANCE, **kwargs):
-
-    if isinstance(X, (tuple, list)):
-        X = X[0]
-
-    (r, c) = X.shape
-
-    if r < c:
-        p = _start_vector(X, largest = True)
-        p /= norm(p)
-
-        iterations = 0
-        while True:
-            t  = dot(X, p)
-            p_ = dot(X.T, t) / dot(t.T, t)
-
-            p_ = prox_op.prox(p_)
-
-            p_ = p_ / norm(p_)
-
-            diff = p - p_
-            p = p_
-            if dot(diff.T, diff) < tolerance:
-                break
-    
-            iterations += 1
-            if iterations >= max_iter:
-                warnings.warn('Maximum number of iterations reached '
-                              'before convergence')
-                break
-
-    else:
-#        if r < c: # Dual case
-    #        warnings.warn("No sparsity for the dual case!")
-    #        XX = dot(X, X.T)
-#        else: # Primal case
-        XX = dot(X.T, X)
-
-        p = _start_vector(X, largest = True)
-#        if r < c:
-#            p = dot(X, p)
-#            p /= np.sqrt(dot(p.T, dot(XX, p)))
-
-        iterations = 0
-        while True:
-
-            p_ = dot(XX, p)
-
-#            if r < c:
-#    #            p_ /= norm(dot(X.T, p_))
-#                p_ /= np.sqrt(dot(p_.T, dot(XX, p_)))
-#            else:
-            p_ = prox_op.prox(p_)
-            p_ = p_ / norm(p_)
-
-            diff = p - p_
-            p = p_
-            if dot(diff.T, diff) < tolerance:
-                break
-
-            iterations += 1
-            if iterations >= max_iter:
-                warnings.warn('Maximum number of iterations reached '
-                              'before convergence')
-                break
-
+#def NIPALS_PCA(X, prox_op = prox_op.ProxOp(),
+#               max_iter = MAX_ITER, tolerance = TOLERANCE, **kwargs):
+#
+#    if isinstance(X, (tuple, list)):
+#        X = X[0]
+#
+#    (r, c) = X.shape
+#
+#    print tolerance
+#
 #    if r < c:
-#        p = dot(X.T, p)
-
-    return [p]
+#        p = _start_vector(X, largest = True)
+#        p /= norm(p)
+#
+#        iterations = 0
+#        while True:
+#            t  = dot(X, p)
+#            p_ = dot(X.T, t) / dot(t.T, t)
+#
+#            p_ = prox_op.prox(p_)
+#
+#            p_ = p_ / norm(p_)
+#
+#            diff = p - p_
+#            p = p_
+#            if dot(diff.T, diff) < tolerance:
+#                break
+#    
+#            iterations += 1
+#            if iterations >= max_iter:
+#                warnings.warn('Maximum number of iterations reached '
+#                              'before convergence')
+#                break
+#    else:
+##        if r < c: # Dual case
+#    #        warnings.warn("No sparsity for the dual case!")
+#    #        XX = dot(X, X.T)
+##        else: # Primal case
+#        XX = dot(X.T, X)
+#
+#        p = _start_vector(X, largest = True)
+##        if r < c:
+##            p = dot(X, p)
+##            p /= np.sqrt(dot(p.T, dot(XX, p)))
+#
+#        iterations = 0
+#        while True:
+#
+#            p_ = dot(XX, p)
+#
+##            if r < c:
+##    #            p_ /= norm(dot(X.T, p_))
+##                p_ /= np.sqrt(dot(p_.T, dot(XX, p_)))
+##            else:
+#            p_ = prox_op.prox(p_)
+#            p_ = p_ / norm(p_)
+#
+#            diff = p - p_
+#            p = p_
+#            if dot(diff.T, diff) < tolerance:
+#                break
+#
+#            iterations += 1
+#            if iterations >= max_iter:
+#                warnings.warn('Maximum number of iterations reached '
+#                              'before convergence')
+#                break
+##    if r < c:
+##        p = dot(X.T, p)
+#    return [p]
 
 
 #class NIPALS(BaseAlgorithm):
@@ -271,7 +272,7 @@ def NIPALS(X, adj_matrix, mode, scheme, not_normed = [], prox_op = prox_op.ProxO
 
             # Apply proximal operator
 #            if soft_threshold[i] > 0:
-            wi  = prox_op.prox(wi)
+            wi  = prox_op.prox(wi, i)
 #                wi = _soft_threshold(wi, soft_threshold[i], copy = False)
 
             # Normalise weight vectors according to their weighting scheme

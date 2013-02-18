@@ -17,7 +17,7 @@ from sandlada.utils import *
 
 class ProxOp(object):
     """Baseclass for proximal operators.
-    
+
     The baseclass also works as an identity operator,
     i.e. one for which x == ProxOp.prox(x).
     """
@@ -51,7 +51,7 @@ class L1(ProxOp):
             x[x < 0] = 0
             x = np.multiply(sign,x)
 
-            if norm(x) > _TOLERANCE or allow_empty:
+            if norm(x) > TOLERANCE or allow_empty:
                 break
             else:
                 warn = True
