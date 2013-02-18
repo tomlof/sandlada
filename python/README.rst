@@ -1,5 +1,5 @@
-Python directory of sandlada
+Python directory of såndlada
 ============================
 
-Please try to make it compliet with sklearn
+Please try to make it compliant with sklearn.
 

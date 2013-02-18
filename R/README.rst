@@ -1,3 +1,3 @@
-R code for sandlada
+R code for sandlåda
 ===================
 
