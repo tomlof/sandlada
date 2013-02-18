@@ -93,26 +93,69 @@ def NIPALS_PCA(X, prox_op = prox_op.ProxOp(),
     if isinstance(X, (tuple, list)):
         X = X[0]
 
-    p = _start_vector(X, largest = True)
-    XX = dot(X.T, X)
+    (r, c) = X.shape
 
-    iterations = 0
-    while True:
+    if r < c:
+        p = _start_vector(X, largest = True)
+        p /= norm(p)
 
-        p_ = dot(XX, p)
-        p  = prox_op.prox(p)
-        p_ = p_ / norm(p_)
+        iterations = 0
+        while True:
+            t  = dot(X, p)
+            p_ = dot(X.T, t) / dot(t.T, t)
 
-        diff = p - p_
-        p = p_
-        if dot(diff.T, diff) < tolerance:
-            break
+            p_ = prox_op.prox(p_)
 
-        iterations += 1
-        if iterations >= max_iter:
-            warnings.warn('Maximum number of iterations reached '
-                          'before convergence')
-            break
+            p_ = p_ / norm(p_)
+
+            diff = p - p_
+            p = p_
+            if dot(diff.T, diff) < tolerance:
+                break
+    
+            iterations += 1
+            if iterations >= max_iter:
+                warnings.warn('Maximum number of iterations reached '
+                              'before convergence')
+                break
+
+    else:
+#        if r < c: # Dual case
+    #        warnings.warn("No sparsity for the dual case!")
+    #        XX = dot(X, X.T)
+#        else: # Primal case
+        XX = dot(X.T, X)
+
+        p = _start_vector(X, largest = True)
+#        if r < c:
+#            p = dot(X, p)
+#            p /= np.sqrt(dot(p.T, dot(XX, p)))
+
+        iterations = 0
+        while True:
+
+            p_ = dot(XX, p)
+
+#            if r < c:
+#    #            p_ /= norm(dot(X.T, p_))
+#                p_ /= np.sqrt(dot(p_.T, dot(XX, p_)))
+#            else:
+            p_ = prox_op.prox(p_)
+            p_ = p_ / norm(p_)
+
+            diff = p - p_
+            p = p_
+            if dot(diff.T, diff) < tolerance:
+                break
+
+            iterations += 1
+            if iterations >= max_iter:
+                warnings.warn('Maximum number of iterations reached '
+                              'before convergence')
+                break
+
+#    if r < c:
+#        p = dot(X.T, p)
 
     return [p]
 

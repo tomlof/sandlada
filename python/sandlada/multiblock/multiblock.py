@@ -7,7 +7,7 @@ latent variable methods that all are computed using the NIPALS algorithm.
 # Author: Tommy Löfstedt <tommy.loefstedt@cea.fr>
 # License: BSD Style.
 
-__all__ = ['PCA', 'SVD', 'EIGSym', 'PLSR', 'PLSC', 'O2PLS'
+__all__ = ['PCA', 'SVD', 'EIGSym', 'PLSR', 'PLSC', 'O2PLS',
            'center', 'scale', 'direct']
 
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
@@ -307,7 +307,7 @@ class BasePLS(BaseEstimator, TransformerMixin):
         else:
             comps = [self.num_comp]
         for i in xrange(len(comps)):
-            if comps[i] < 1:
+            if comps[i] < 0:
                 raise ValueError('Invalid number of components')
             if comps[i] > minN:
                 warnings.warn('Too many components! No more than %d can be '
@@ -524,7 +524,7 @@ class EIGSym(SVD):
 class PLSR(BasePLS, RegressorMixin):
 
     def __init__(self, **kwargs):
-        BasePLS.__init__(self, mode = _NEWA, scheme = _HORST, not_normed = [1],
+        BasePLS.__init__(self, mode = NEWA, scheme = HORST, not_normed = [1],
                          **kwargs)
 
     def _get_transform(self, index = 0):
@@ -663,21 +663,23 @@ class O2PLS(PLSC):
         self.Wo = np.zeros((N1, Ax))
         self.To = np.zeros((M,  Ax))
         self.Po = np.zeros((N1, Ax))
-        self.Co = np.zeros((N1, Ay))
+        self.Co = np.zeros((N2, Ay))
         self.Uo = np.zeros((M,  Ay))
-        self.Qo = np.zeros((N1, Ay))
+        self.Qo = np.zeros((N2, Ay))
 
         svd = SVD(num_comp = A)
         svd.fit(dot(X.T, Y))
         W = svd.U
         C = svd.V
 
-        eigsym = EIGSym(num_comp = 1)
+#        eigsym = EIGSym(num_comp = 1)
+        eigsym = SVD(num_comp = 1)
         for a in xrange(Ax):
             T  = dot(X, W)
             E  = X - dot(T, W.T)
             TE = dot(T.T, E)
-            eigsym.fit(dot(TE.T, TE))
+#            eigsym.fit(dot(TE.T, TE))
+            eigsym.fit(TE)
             wo = eigsym.V
             to = dot(X, wo)
             po = dot(X.T, to) / dot(to.T, to)
@@ -692,7 +694,8 @@ class O2PLS(PLSC):
             U  = dot(Y, C)
             F  = Y - dot(U, C.T)
             UF = dot(U.T, F)
-            eigsym.fit(dot(UF.T, UF))
+#            eigsym.fit(dot(UF.T, UF))
+            eigsym.fit(UF)
             co = eigsym.V
             uo = dot(Y, co)
             qo = dot(Y.T, uo) / dot(uo.T, uo)

@@ -5,7 +5,7 @@ from sandlada.utils.testing import *
 from sandlada.multiblock import *
 from sklearn.datasets import load_linnerud
 
-import sklearn.NIPALS as pls
+import sklearn.pls as pls
 from math import log
 from sklearn.pls import PLSRegression
 from sklearn.pls import PLSCanonical
@@ -78,7 +78,7 @@ def test_o2pls():
     W  = np.asarray([[-0.0000000035873],[-0.0000000035873],[-0.0000000035873],
                      [-0.0000000035873],[ 0.5773502687753],[ 0.5773502687753],
                      [ 0.5773502700183],[               0],[               0]])
-    W, o2pls.W = pls.direct(W, o2pls.W, compare = True)
+    W, o2pls.W = direct(W, o2pls.W, compare = True)
     assert_array_almost_equal(W, o2pls.W, decimal=5, err_msg="O2PLS does not" \
             " give the correct weights in X")
     
@@ -86,21 +86,21 @@ def test_o2pls():
                      [-1.0182038851347],[ 0.1565405190876],[ 0.1565295366198],
                      [-1.0557643604012],[-0.5130595674519],[ 0.3138616360639],
                      [-0.3627222076846]])
-    T, o2pls.T = pls.direct(T, o2pls.T, compare = True)
+    T, o2pls.T = direct(T, o2pls.T, compare = True)
     assert_array_almost_equal(T, o2pls.T, decimal=5, err_msg="O2PLS does not" \
             " give the correct scores in X")
 
     P  = np.asarray([[-0.0000000035873],[-0.0000000035873],[-0.0000000035873],
                      [-0.0000000035873],[ 0.5773502687753],[ 0.5773502687753],
                      [ 0.5773502700183],[               0],[               0]])
-    P, o2pls.P = pls.direct(P, o2pls.P, compare = True)
+    P, o2pls.P = direct(P, o2pls.P, compare = True)
     assert_array_almost_equal(P, o2pls.P, decimal=5, err_msg="O2PLS does not" \
             " give the correct loadings in X")
 
     Wo = np.asarray([[-0.4629100496613],[-0.4629100496613],[-0.4629100496613],
                      [-0.4629100496613],[-0.1543033544685],[-0.1543033544685],
                      [ 0.3086066967678],[               0],[               0]])
-    Wo, o2pls.Wo = pls.direct(Wo, o2pls.Wo, compare = True)
+    Wo, o2pls.Wo = direct(Wo, o2pls.Wo, compare = True)
     assert_array_almost_equal(Wo, o2pls.Wo, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique weights in X")
 
@@ -108,21 +108,21 @@ def test_o2pls():
                      [ 0.7141661638895],[ 1.3523258395355],[ 0.5103916850288],
                      [ 0.0373342153684],[-0.5658484610118],[ 0.8644955981846],
                      [ 0.7835700349552]])
-    To, o2pls.To = pls.direct(To, o2pls.To, compare = True)
+    To, o2pls.To = direct(To, o2pls.To, compare = True)
     assert_array_almost_equal(To, o2pls.To, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique scores in X")
 
     Po = np.asarray([[-0.4629100479271],[-0.4629100479271],[-0.4629100479271],
                      [-0.4629100479271],[-0.4629100494572],[-0.4629100494572],
                      [ 0.0000000000150],[               0],[               0]])
-    Po, o2pls.Po = pls.direct(Po, o2pls.Po, compare = True)
+    Po, o2pls.Po = direct(Po, o2pls.Po, compare = True)
     assert_array_almost_equal(Po, o2pls.Po, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique loadings in X")
 
     C  = np.asarray([[               0],[               0],[ 0.5773502653499],
                      [ 0.5773502711095],[ 0.5773502711095],[-0.0000000006458],
                      [-0.0000000006458],[-0.0000000006458],[-0.0000000006458]])
-    C, o2pls.C = pls.direct(C, o2pls.C, compare = True)
+    C, o2pls.C = direct(C, o2pls.C, compare = True)
     assert_array_almost_equal(C, o2pls.C, decimal=5, err_msg="O2PLS does not" \
             " give the correct weights in Y")
 
@@ -130,21 +130,21 @@ def test_o2pls():
                      [-1.0182039005573],[ 0.1565405177895],[ 0.1565295466182],
                      [-1.0557643651281],[-0.5130595684168],[ 0.3138616457148],
                      [-0.3627222001620]])
-    U, o2pls.U = pls.direct(U, o2pls.U, compare = True)
+    U, o2pls.U = direct(U, o2pls.U, compare = True)
     assert_array_almost_equal(U, o2pls.U, decimal=5, err_msg="O2PLS does not" \
             " give the correct scores in Y")
 
     Q  = np.asarray([[               0],[               0],[ 0.5773502653499],
                      [ 0.5773502711095],[ 0.5773502711095],[-0.0000000006458],
                      [-0.0000000006458],[-0.0000000006458],[-0.0000000006458]])
-    Q, o2pls.Q = pls.direct(Q, o2pls.Q, compare = True)
+    Q, o2pls.Q = direct(Q, o2pls.Q, compare = True)
     assert_array_almost_equal(Q, o2pls.Q, decimal=5, err_msg="O2PLS does not" \
             " give the correct loadings in Y")
 
     Co = np.asarray([[-0.0000000000000],[-0.0000000000000],[ 0.3086067007710],
                      [-0.1543033498817],[-0.1543033498817],[-0.4629100497585],
                      [-0.4629100497585],[-0.4629100497585],[-0.4629100497585]])
-    Co, o2pls.Co = pls.direct(Co, o2pls.Co, compare = True)
+    Co, o2pls.Co = direct(Co, o2pls.Co, compare = True)
     assert_array_almost_equal(Co, o2pls.Co, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique weights in Y")
 
@@ -152,14 +152,14 @@ def test_o2pls():
                      [ 0.4526578568357],[-0.1430318048907],[-0.3371378335299],
                      [ 0.5494330695544],[-0.3942048787367],[ 0.3248866786239],
                      [-0.4046679696962]])
-    Uo, o2pls.Uo = pls.direct(Uo, o2pls.Uo, compare = True)
+    Uo, o2pls.Uo = direct(Uo, o2pls.Uo, compare = True)
     assert_array_almost_equal(Uo, o2pls.Uo, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique scores in Y")
 
     Qo = np.asarray([[               0],[               0],[ 0.0000000008807],
                      [-0.4629100498755],[-0.4629100498755],[-0.4629100499092],
                      [-0.4629100499092],[-0.4629100499092],[-0.4629100499092]])
-    Qo, o2pls.Qo = pls.direct(Qo, o2pls.Qo, compare = True)
+    Qo, o2pls.Qo = direct(Qo, o2pls.Qo, compare = True)
     assert_array_almost_equal(Qo, o2pls.Qo, decimal=5, err_msg="O2PLS does not" \
             " give the correct unique loadings in Y")
 
@@ -188,7 +188,7 @@ def test_eigsym():
 
     Xhat = dot(V, dot(np.diag(D), V.T))
 
-    V, eig.V = pls.direct(V, eig.V, compare = True)
+    V, eig.V = direct(V, eig.V, compare = True)
     assert_array_almost_equal(V, eig.V, decimal=5, err_msg="EIGSym does not" \
             " give the correct eigenvectors")
 
