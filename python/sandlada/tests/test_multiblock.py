@@ -22,9 +22,9 @@ def check_ortho(M, err_msg):
 
 def test_multiblock():
 
-#    test_SVD_PCA()
-#    test_eigsym()
-#    test_o2pls()
+    test_SVD_PCA()
+    test_eigsym()
+    test_o2pls()
     test_predictions()
 
 
