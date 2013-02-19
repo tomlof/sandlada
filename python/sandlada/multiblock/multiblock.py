@@ -341,15 +341,18 @@ class BasePLS(BaseEstimator, TransformerMixin):
         return X
 
 
-    def fit(self, *X):
+    def fit(self, *X, **kwargs):
         # Copy since this will contain the residual (deflated) matrices
         X = check_arrays(*X, dtype = np.float, copy = self.copy,
                          sparse_format = 'dense')
         # Number of matrices
         self.n = len(X)
 
+        preprocess = kwargs.pop("preprocess", True)
+
         self._check_inputs(X)
-        X = self._preprocess(X)
+        if preprocess:
+            X = self._preprocess(X)
 
         # Results matrices
         self.W  = []
@@ -429,7 +432,7 @@ class BasePLS(BaseEstimator, TransformerMixin):
 
     def transform(self, *X, **kwargs):
 
-        copy = kwargs.get('copy', True)
+        copy = kwargs.pop('copy', True)
 
         n = len(X)
         if n > self.n:
@@ -467,7 +470,7 @@ class PCA(BasePLS):
         return self.P
 
     def fit(self, *X, **kwargs):
-        BasePLS.fit(self, X[0])
+        BasePLS.fit(self, X[0], **kwargs)
         self.T = self.T[0]
         self.P = self.W[0]
         del self.W
@@ -502,10 +505,10 @@ class SVD(PCA):
         return self.V
 
     def fit(self, *X, **kwargs):
-        PCA.fit(self, X[0])
+        PCA.fit(self, X[0], **kwargs)
         self.U = self.T
         # Move norms of U to the diagonal matrix S
-        norms = np.sum(self.U**2,axis=0)**(0.5)
+        norms = np.sum(self.U**2, axis = 0)**(0.5)
         self.U /= norms
         self.S = np.diag(norms)
         self.V = self.P
@@ -516,7 +519,7 @@ class SVD(PCA):
 
 
 class EIGSym(SVD):
-    """Performs the eigenvalue decomposition of a symmetric matrix.
+    """Performs eigenvalue decomposition of a symmetric matrix.
 
     The decomposition generates matrices such that
 
@@ -527,7 +530,7 @@ class EIGSym(SVD):
         SVD.__init__(self, **kwargs)
 
     def fit(self, *X, **kwargs):
-        SVD.fit(self, X[0])
+        SVD.fit(self, X[0], **kwargs)
         self.D = self.S
 
         del self.U
@@ -557,10 +560,10 @@ class PLSR(BasePLS, RegressorMixin):
             return X # Do not deflate Y
 
     def fit(self, X, Y = None, **kwargs):
-        Y = kwargs.get('y', Y)
+        Y = kwargs.pop('y', Y)
         if Y == None:
             raise ValueError('Y is not supplied')
-        BasePLS.fit(self, X, Y)
+        BasePLS.fit(self, X, Y, **kwargs)
         self.C  = self.W[1]
         self.U  = self.T[1]
         self.Q  = self.P[1]
@@ -589,7 +592,7 @@ class PLSR(BasePLS, RegressorMixin):
         return (Ypred*self.stds[1]) + self.means[1]
 
     def transform(self, X, Y = None, **kwargs):
-        Y = kwargs.get('y', Y)
+        Y = kwargs.pop('y', Y)
         if Y != None:
             T = BasePLS.transform(self, X, Y, **kwargs)
         else:
@@ -598,8 +601,9 @@ class PLSR(BasePLS, RegressorMixin):
         return T
 
     def fit_transform(self, X, Y = None, **kwargs):
-        Y = kwargs.get('y', Y)
+        Y = kwargs.pop('y', Y)
         return self.fit(X, Y, **kwargs).transform(X, Y)
+
 
 
 class PLSC(PLSR):
@@ -619,19 +623,26 @@ class PLSC(PLSR):
         return X - dot(t, p.T) # Deflate using their loadings
 
     def fit(self, X, Y = None, **kwargs):
-        Y = kwargs.get('y', Y)
-        PLSR.fit(self, X, Y)
-        self.Cs = dot(self.C, np.linalg.inv(dot(self.Q.T,self.C)))
+        Y = kwargs.pop('y', Y)
+        PLSR.fit(self, X, Y, **kwargs)
+        self.Cs = dot(self.C, np.linalg.inv(dot(self.Q.T, self.C)))
 
-        self.Bx = self.B
-        self.By = dot(self.Cs, self.W.T)
+        self.Dx = dot(np.linalg.pinv(self.T), self.U)
+        self.Dy = dot(np.linalg.pinv(self.U), self.T)
+
+#        self.Bx = self.B
+#        self.Bx = dot(self.Ws, dot(self.Dx, self.Q.T)) # Yhat = XW*DxQ' = XBx
+#        self.By = dot(self.Cs, dot(self.Dy, self.P.T)) # Xhat = XC*DyP' = YBy
+        self.Bx = dot(self.Ws, self.Q.T) # Yhat = XW*DxQ' = XBx
+        self.By = dot(self.Cs, self.P.T) # Xhat = XC*DyP' = YBy
         del self.B
 
         return self
 
-    def predict(self, X, Y = None, copy = True):
+    def predict(self, X, Y = None, copy = True, **kwargs):
+        Y = kwargs.pop('y', Y)
 
-        Ypred = PLSR.predict(self, X, copy = copy)
+        Ypred = PLSR.predict(self, X, copy = copy, **kwargs)
 
         if Y != None:
             Y = np.asarray(Y)
@@ -640,7 +651,7 @@ class PLSC(PLSR):
             else:
                 Y -= self.means[1]
                 Y /= self.stds[1]
-    
+
             Xpred = (dot(Y, self.By)*self.stds[0]) + self.means[0]
 
             return Ypred, Xpred
@@ -648,14 +659,18 @@ class PLSC(PLSR):
         return Ypred
 
 
+
 class O2PLS(PLSC):
 
-    def __init__(self, **kwargs):
-        PLSC.__init__(self, **kwargs)
+    def __init__(self, num_comp = 0, **kwargs):
+        PLSC.__init__(self, num_comp = num_comp[0], **kwargs)
+        self.A  = num_comp[0]
+        self.Ax = num_comp[1]
+        self.Ay = num_comp[2]
 
     def fit(self, X, Y = None, **kwargs):
 
-        Y = kwargs.get('y', Y)
+        Y = kwargs.pop('y', Y)
         self.num_comp  = kwargs.pop("num_comp",  self.num_comp)
         self.max_iter  = kwargs.pop("max_iter",  self.max_iter)
         self.tolerance = kwargs.pop("tolerance", self.tolerance)
@@ -670,21 +685,21 @@ class O2PLS(PLSC):
         Y = X[1]
         X = X[0]
 
-        A  = self.num_comp[0]
-        Ax = self.num_comp[1]
-        Ay = self.num_comp[2]
+#        A  = self.num_comp[0]
+#        Ax = self.num_comp[1]
+#        Ay = self.num_comp[2]
 
         # Results matrices
         M, N1 = X.shape
         M, N2 = Y.shape
-        self.Wo = np.zeros((N1, Ax))
-        self.To = np.zeros((M,  Ax))
-        self.Po = np.zeros((N1, Ax))
-        self.Co = np.zeros((N2, Ay))
-        self.Uo = np.zeros((M,  Ay))
-        self.Qo = np.zeros((N2, Ay))
+        self.Wo = np.zeros((N1, self.Ax))
+        self.To = np.zeros((M,  self.Ax))
+        self.Po = np.zeros((N1, self.Ax))
+        self.Co = np.zeros((N2, self.Ay))
+        self.Uo = np.zeros((M,  self.Ay))
+        self.Qo = np.zeros((N2, self.Ay))
 
-        svd = SVD(num_comp = A, tolerance = self.tolerance,
+        svd = SVD(num_comp = self.A, tolerance = self.tolerance,
                   max_iter = self.max_iter, **kwargs)
         svd.fit(dot(X.T, Y))
         W = svd.U
@@ -693,7 +708,7 @@ class O2PLS(PLSC):
 #        eigsym = EIGSym(num_comp = 1)
         eigsym = SVD(num_comp = 1, tolerance = self.tolerance,
                      max_iter = self.max_iter, **kwargs)
-        for a in xrange(Ax):
+        for a in xrange(self.Ax):
             T  = dot(X, W)
             E  = X - dot(T, W.T)
             TE = dot(T.T, E)
@@ -717,7 +732,7 @@ class O2PLS(PLSC):
 
             X -= dot(to, po.T)
 
-        for a in xrange(Ay):
+        for a in xrange(self.Ay):
             U  = dot(Y, C)
             F  = Y - dot(U, C.T)
             UF = dot(U.T, F)
@@ -741,10 +756,7 @@ class O2PLS(PLSC):
 
             Y -= dot(uo, qo.T)
 
-        num_comp = self.num_comp
-        self.num_comp = A
-        PLSC.fit(self, X, Y, **kwargs)
-        self.num_comp = num_comp
+        PLSC.fit(self, X, Y, preprocess = False, **kwargs)
 
         return self
 
@@ -752,16 +764,61 @@ class O2PLS(PLSC):
         Y = kwargs.get('y', Y)
         if Y != None:
             To = dot(X, self.Wo)
-            X = X - dot(To, self.Po)
+            X = X - dot(To, self.Po.T)
             Uo = dot(Y, self.Co)
-            Y = Y - dot(Uo, self.Qo)
+            Y = Y - dot(Uo, self.Qo.T)
             T = PLSC.transform(self, X, Y, **kwargs)
         else:
             To = dot(X, self.Wo)
-            X = X - dot(To, self.Po)
+            X = X - dot(To, self.Po.T)
             T = PLSC.transform(self, X, **kwargs)
             T = T[0]
         return T
+
+    def predict(self, X = None, Y = None, copy = True, **kwargs):
+        Y = kwargs.get('y', Y)
+
+        if X == None and Y == None:
+            raise ValueError("At least one of X and Y must be given")
+
+        if X != None:
+            X = np.asarray(X)
+            if copy:
+                X = (X - self.means[0]) / self.stds[0]
+            else:
+                X -= self.means[0]
+                X /= self.stds[0]
+            To = dot(X, self.Wo)
+            if copy:
+                X = X - dot(To, self.Po.T)
+            else:
+                X -= dot(To, self.Po.T)
+
+#            self.Bx = dot(self.Ws, dot(self.Dx, self.Q.T))
+            Ypred = (dot(X, self.Bx)*self.stds[1]) + self.means[1]
+
+        if Y != None:
+            Y = np.asarray(Y)
+            if copy:
+                Y = (Y - self.means[1]) / self.stds[1]
+            else:
+                Y -= self.means[1]
+                Y /= self.stds[1]
+            Uo = dot(Y, self.Co)
+            if copy:
+                Y = Y - dot(Uo, self.Qo.T)
+            else:
+                Y -= dot(Uo, self.Qo.T)
+
+            Xpred = (dot(Y, self.By)*self.stds[0]) + self.means[0]
+
+        if X != None and Y != None:
+            return Ypred, Xpred
+        elif X != None:
+            return Ypred
+        else: # Y != None
+            return Xpred
+
 
 
 #class CCA(BasePLS):

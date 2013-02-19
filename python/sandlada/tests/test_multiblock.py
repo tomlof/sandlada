@@ -14,12 +14,19 @@ from sklearn.pls import CCA
 from sklearn.pls import PLSSVD
 from sklearn.pls import _center_scale_xy
 
+def check_ortho(M, err_msg):
+    K = np.dot(M.T, M)
+    assert_array_almost_equal(K, np.diag(np.diag(K)), err_msg=err_msg)
+
+
 
 def test_multiblock():
 
-    test_SVD_PCA()
-    test_eigsym()
-    test_o2pls()
+#    test_SVD_PCA()
+#    test_eigsym()
+#    test_o2pls()
+    test_predictions()
+
 
 
 def test_o2pls():
@@ -377,8 +384,6 @@ def test_SVD_PCA():
         assert_array_almost_equal(svd.V, V, decimal=num_decimals-2,
                 err_msg="sklearn.NIPALS.SVD and numpy.linalg.svd implementations " \
                 "lead to different loadings")
-#        print "Comparing loadings of sklearn.NIPALS.SVD and numpy.linalg.svd... OK!"\
-#                " (diff=%.4f, threshold=%0.4f)" % (np.max(np.abs(V - svd.V)), st)
 
 
 
@@ -401,8 +406,6 @@ def test_SVD_PCA():
         US = dot(U,np.diag(S))
         US = US[:,0:num_comp]
         V  = V[:,0:num_comp]
-    
-#        err = np.max(np.abs(Xtr - dot(pca.T,pca.P.T)))
 
         if st < tol:
             num_decimals = 5
@@ -410,7 +413,6 @@ def test_SVD_PCA():
             num_decimals = int(log(1./st, 10) + 0.5)
         assert_array_almost_equal(Xtr, dot(pca.T,pca.P.T), decimal = num_decimals-1,
                 err_msg="Model does not equal the matrices")
-#        print "PCA: Testing equality of model and matrix ... OK! (err=%.5f, threshold=%.4f)" % (err, st)
 
 
 
@@ -439,18 +441,12 @@ def test_SVD_PCA():
 
     assert_array_almost_equal(pca.P, V, decimal = 2, err_msg = "NIPALS PCA and "
             "numpy.linalg.svd implementations lead to different loadings")
-#    print "Comparing loadings of NIPALS PCA and numpy.linalg.svd... OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(V - pca.P))
 
     assert_array_almost_equal(pca.T, US, decimal = 2, err_msg = "NIPALS PCA and "
             "numpy.linalg.svd implementations lead to different scores")
-#    print "Comparing scores of NIPALS PCA and numpy.linalg.svd...   OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(US - pca.T))
 
     assert_array_almost_equal(Tte, SVDte, decimal = 2, err_msg = "NIPALS PCA and "
             "numpy.linalg.svd implementations lead to different scores")
-#    print "Comparing test set of NIPALS PCA and numpy.linalg.svd... OK! "\
-#          "(max diff = %.4f)" % np.max(np.abs(Tte - SVDte))
 
 
 
@@ -499,13 +495,75 @@ def test_SVD_PCA():
             "numpy.linalg.svd implementations lead to different reconstructions")
 
 
-#    d = load_linnerud()
-#    X = d.data
-#    Y = d.target
-#    tol = 5e-12
-#    Xorig = X.copy()
-#    Yorig = Y.copy()
-#
+
+def test_predictions():
+
+    d = load_linnerud()
+    X = d.data
+    Y = d.target
+    tol = 5e-12
+    miter = 1000
+    num_comp = 2
+    Xorig = X.copy()
+    Yorig = Y.copy()
+#    SSY = np.sum(Yorig**2)
+#    center = True
+    scale  = False
+
+
+    pls1 = PLSRegression(n_components = num_comp, scale = scale,
+                 tol = tol, max_iter = miter, copy = True)
+    pls1.fit(Xorig, Yorig)
+    Yhat1 = pls1.predict(Xorig)
+
+    SSYdiff1 = np.sum((Yorig-Yhat1)**2)
+#    print "PLSRegression: R2Yhat = %.4f" % (1 - (SSYdiff1 / SSY))
+
+    # Compare PLSR and sklearn.PLSRegression
+    pls3 = PLSR(num_comp = num_comp, center = True, scale = scale,
+                tolerance = tol, max_iter = miter)
+    pls3.fit(X, Y)
+    Yhat3 = pls3.predict(X)
+
+    assert_array_almost_equal(Yhat1, Yhat3, decimal = 5,
+            err_msg = "PLSR gives wrong prediction")
+
+    SSYdiff3 = np.sum((Yorig-Yhat3)**2)
+#    print "PLSR         : R2Yhat = %.4f" % (1 - (SSYdiff3 / SSY))
+
+    assert abs(SSYdiff1 - SSYdiff3) < 0.00005
+
+
+    pls2 = PLSCanonical(n_components = num_comp, scale = scale,
+                        tol = tol, max_iter = miter, copy = True)
+    pls2.fit(Xorig, Yorig)
+    Yhat2 = pls2.predict(Xorig)
+
+    SSYdiff2 = np.sum((Yorig-Yhat2)**2)
+#    print "PLSCanonical : R2Yhat = %.4f" % (1 - (SSYdiff2 / SSY))
+
+    # Compare PLSC and sklearn.PLSCanonical
+    pls4 = PLSC(num_comp = num_comp, center = True, scale = scale,
+                tolerance = tol, max_iter = miter)
+    pls4.fit(X, Y)
+    Yhat4 = pls4.predict(X)
+
+    SSYdiff4 = np.sum((Yorig-Yhat4)**2)
+#    print "PLSC         : R2Yhat = %.4f" % (1 - (SSYdiff4 / SSY))
+
+    # Compare O2PLS and sklearn.PLSCanonical
+    pls5 = O2PLS(num_comp = [num_comp, 1, 0], center = True, scale = scale,
+                 tolerance = tol, max_iter = miter)
+    pls5.fit(X, Y)
+    Yhat5 = pls5.predict(X)
+
+    SSYdiff5 = np.sum((Yorig-Yhat5)**2)
+#    print "O2PLS        : R2Yhat = %.4f" % (1 - (SSYdiff5 / SSY))
+
+    assert abs(SSYdiff2 - SSYdiff4) < 0.00005
+    assert SSYdiff2 > SSYdiff5
+
+
 #    # 1) Canonical (symetric) PLS (PLS 2 blocks canonical mode A)
 #    # ===========================================================
 #    # Compare 2 algo.: nipals vs. svd
@@ -930,89 +988,6 @@ def test_SVD_PCA():
 #                " (err=%.4f, threshold=%0.4f)" % (np.sum((Yhat-Yhat_)**2), st)
 #
 #
-#    # Compare PLSR in sklearn.NIPALS and sklearn.pls
-#
-#    d = load_linnerud()
-#    X = np.asarray(d.data)
-#    Y = d.target
-#    num_comp = 3
-#    tol = 5e-12
-#
-#    plsr = pls.PLSR(num_comp = num_comp, center = True, scale = True,
-#                    tolerance=tol, max_iter=1000, soft_threshold = 0)
-#    plsr.fit(X, Y)
-#    Yhat = plsr.predict(X)
-#
-#    Xorig = X.copy()
-#    Yorig = Y.copy()
-#    X, mX = pls.center(X, return_means = True)
-#    X, sX = pls.scale(X, return_stds = True, centered = True)
-#    Y, mY = pls.center(Y, return_means = True)
-#    Y, sY = pls.scale(Y, return_stds = True, centered = True)
-#    W = np.zeros((X.shape[1],num_comp))
-#    P = np.zeros((X.shape[1],num_comp))
-#    C = np.zeros((Y.shape[1],num_comp))
-#    Xuv = X.copy()
-##    Yuv = Y.copy()
-#
-#    XY = dot(X.T, Y)
-#    W_, S_, C_ = np.linalg.svd(XY)
-#    w1 = W_[:,[0]]
-#    W[:,0] = w1.ravel()
-#    t1 = dot(X, w1)
-#    p1 = dot(X.T, t1) / dot(t1.T, t1)
-#    P[:,0] = p1.ravel()
-#    c1 = dot(Y.T, t1) / dot(t1.T, t1)
-#    C[:,0] = c1.ravel()
-#    X -= dot(t1,p1.T)
-#
-#    if num_comp >= 2:
-#        XY = dot(X.T, Y)
-#        W_, S_, C_ = np.linalg.svd(XY)
-#        w2 = W_[:,[0]]
-#        W[:,1] = w2.ravel()
-#        t2 = dot(X, w2)
-#        p2 = dot(X.T, t2) / dot(t2.T, t2)
-#        P[:,1] = p2.ravel()
-#        c2 = dot(Y.T, t2) / dot(t2.T, t2)
-#        C[:,1] = c2.ravel()
-#        X -= dot(t2,p2.T)
-#
-#    if num_comp >= 3:
-#        XY = dot(X.T, Y)
-#        W_, S_, C_ = np.linalg.svd(XY)
-#        w3 = W_[:,[0]]
-#        W[:,2] = w3.ravel()
-#        t3 = dot(X, w3)
-#        p3 = dot(X.T, t3) / dot(t3.T, t3)
-#        P[:,2] = p3.ravel()
-#        c3 = dot(Y.T, t3) / dot(t3.T, t3)
-#        C[:,2] = c3.ravel()
-#        X -= dot(t3,p3.T)
-#
-#    Ws  = dot(W, np.linalg.inv(dot(P.T, W)))
-#    B   = dot(Ws, C.T)
-#    Yhat_ = (dot(Xuv, B) * sY) + mY
-#
-#    pls2 = PLSRegression(n_components=num_comp, scale=True,
-#                 max_iter=1000, tol=tol, copy=True)
-#    pls2.fit(Xorig, Yorig)
-#    Yhat__ = pls2.predict(Xorig)
-#
-#    SSY     = np.sum(Yorig**2)
-#    SSYdiff = np.sum((Yorig-Yhat)**2)
-#    print "sklearn.NIPALS: Comparing original and predicted Y ... OK!"\
-#            " (R2Yhat = %.4f)" % (1 - (SSYdiff / SSY))
-#    SSYdiff = np.sum((Yorig-Yhat_)**2)
-#    print "Manual        : Comparing original and predicted Y ... OK!"\
-#            " (R2Yhat = %.4f)" % (1 - (SSYdiff / SSY))
-#    SSYdiff = np.sum((Yorig-Yhat__)**2)
-#    print "sklearn.pls   : Comparing original and predicted Y ... OK!"\
-#            " (R2Yhat = %.4f)" % (1 - (SSYdiff / SSY))
-#    assert_array_almost_equal(Yhat__, Yhat, decimal=5,
-#            err_msg="NIPALS and pls implementations lead to different" \
-#            " predictions")
-
 
 
 def test_scale():
